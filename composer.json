@@ -13,9 +13,13 @@
         }
     ],
     "require":{
-        "php":">=5.4",
-        "symfony/symfony":"~2.7|~3.0",
-        "jms/serializer-bundle":"~1.1"
+        "php": ">=5.4",
+        "jms/serializer-bundle": "~1.1",
+        "roave/security-advisories": "dev-master",
+        "symfony/symfony": "~2.7|~3.0"
+    },
+    "config": {
+        "sort-packages": true
     },
     "autoload":{
         "psr-0":{
@@ -24,4 +28,3 @@
     },
     "target-dir": "Wa72/JsonRpcBundle"
 }
-
