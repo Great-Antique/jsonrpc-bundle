@@ -19,19 +19,4 @@ class Wa72JsonRpcBundleTestKernel extends Kernel
         $loader->load(__DIR__.'/config/config.yml');
     }
 
-    /**
-     * @return string
-     */
-    public function getCacheDir()
-    {
-        return sys_get_temp_dir().'/Wa72JsonRpcBundle/cache';
-    }
-
-    /**
-     * @return string
-     */
-    public function getLogDir()
-    {
-        return sys_get_temp_dir().'/Wa72JsonRpcBundle/logs';
-    }
 }
