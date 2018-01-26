@@ -5,3 +5,6 @@ services:
         class: Wa72\JsonRpcBundle\Tests\Testservice
         tags:
           - {name: wa72_jsonrpc.exposable}
+    translator:
+        class: Symfony\Component\Translation\TranslatorInterface
+        synthetic: true
