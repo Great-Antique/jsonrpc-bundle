@@ -1,9 +1,11 @@
 <?php
+
 namespace Wa72\JsonRpcBundle\Tests\Fixtures;
 
 use JMS\Serializer\Annotation\Type;
 
-class Testparameter {
+class Testparameter
+{
     /**
      * @Type("string")
      */

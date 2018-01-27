@@ -10,7 +10,7 @@ class Wa72JsonRpcBundleTestKernel extends Kernel
         return array(
             new Symfony\Bundle\FrameworkBundle\FrameworkBundle(),
             new JMS\SerializerBundle\JMSSerializerBundle(),
-            new Wa72\JsonRpcBundle\Wa72JsonRpcBundle()
+            new Wa72\JsonRpcBundle\Wa72JsonRpcBundle(),
         );
     }
 

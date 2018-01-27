@@ -2,6 +2,7 @@
 
 namespace Wa72\JsonRpcBundle\Controller;
 
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -39,18 +40,18 @@ use Symfony\Component\DependencyInjection\ContainerAwareTrait;
  * "servicename:method" as RPC method name.
  *
  * @license MIT
- * @author Christoph Singer
+ * @author  Christoph Singer
  *
  */
 class JsonRpcController implements ContainerAwareInterface
 {
     use ContainerAwareTrait;
-    
-    const PARSE_ERROR = -32700;
-    const INVALID_REQUEST = -32600;
+
+    const PARSE_ERROR      = -32700;
+    const INVALID_REQUEST  = -32600;
     const METHOD_NOT_FOUND = -32601;
-    const INVALID_PARAMS = -32602;
-    const INTERNAL_ERROR = -32603;
+    const INVALID_PARAMS   = -32602;
+    const INTERNAL_ERROR   = -32603;
 
     /**
      * Functions that are allowed to be called
@@ -72,14 +73,17 @@ class JsonRpcController implements ContainerAwareInterface
     private $serializationContext;
 
     /**
-     * @param \Symfony\Component\DependencyInjection\ContainerInterface $container
-     * @param array $config Associative array for configuration, expects at least a key "functions"
+     * @param ContainerInterface $container
+     * @param array              $config Associative array for configuration, expects at least a key "functions"
+     *
      * @throws \InvalidArgumentException
      */
     public function __construct($container, $config)
     {
         if (isset($config['functions'])) {
-            if (!is_array($config['functions'])) throw new \InvalidArgumentException('Configuration parameter "functions" must be array');
+            if (!is_array($config['functions'])) {
+                throw new \InvalidArgumentException('Configuration parameter "functions" must be array');
+            }
             $this->functions = $config['functions'];
         }
         $this->setContainer($container);
@@ -87,12 +91,13 @@ class JsonRpcController implements ContainerAwareInterface
 
     /**
      * @param Request $httprequest
+     *
      * @return Response
      */
     public function execute(Request $httprequest)
     {
-        $json = $httprequest->getContent();
-        $request = json_decode($json, true);
+        $json      = $httprequest->getContent();
+        $request   = json_decode($json, true);
         $requestId = (isset($request['id']) ? $request['id'] : null);
 
         if ($request === null) {
@@ -103,7 +108,7 @@ class JsonRpcController implements ContainerAwareInterface
 
         if (in_array($request['method'], array_keys($this->functions))) {
             $servicename = $this->functions[$request['method']]['service'];
-            $method = $this->functions[$request['method']]['method'];
+            $method      = $this->functions[$request['method']]['method'];
         } else {
             if (count($this->services) && strpos($request['method'], ':') > 0) {
                 list($servicename, $method) = explode(':', $request['method']);
@@ -122,16 +127,23 @@ class JsonRpcController implements ContainerAwareInterface
         $params = (isset($request['params']) ? $request['params'] : array());
 
         if (is_callable(array($service, $method))) {
-            $r = new \ReflectionMethod($service, $method);
+            $r   = new \ReflectionMethod($service, $method);
             $rps = $r->getParameters();
 
             if (is_array($params)) {
                 if (!(count($params) >= $r->getNumberOfRequiredParameters()
                     && count($params) <= $r->getNumberOfParameters())
                 ) {
-                    return $this->getErrorResponse(self::INVALID_PARAMS, $requestId,
-                        sprintf('Number of given parameters (%d) does not match the number of expected parameters (%d required, %d total)',
-                            count($params), $r->getNumberOfRequiredParameters(), $r->getNumberOfParameters()));
+                    return $this->getErrorResponse(
+                        self::INVALID_PARAMS,
+                        $requestId,
+                        sprintf(
+                            'Number of given parameters (%d) does not match the number of expected parameters (%d required, %d total)',
+                            count($params),
+                            $r->getNumberOfRequiredParameters(),
+                            $r->getNumberOfParameters()
+                        )
+                    );
                 }
 
             }
@@ -141,8 +153,11 @@ class JsonRpcController implements ContainerAwareInterface
                     /* @var \ReflectionParameter $rp */
                     $name = $rp->name;
                     if (!isset($params[$rp->name]) && !$rp->isOptional()) {
-                        return $this->getErrorResponse(self::INVALID_PARAMS, $requestId,
-                            sprintf('Parameter %s is missing', $name));
+                        return $this->getErrorResponse(
+                            self::INVALID_PARAMS,
+                            $requestId,
+                            sprintf('Parameter %s is missing', $name)
+                        );
                     }
                     if (isset($params[$rp->name])) {
                         $newparams[] = $params[$rp->name];
@@ -158,8 +173,8 @@ class JsonRpcController implements ContainerAwareInterface
                 // if the json_decode'd param value is an array but an object is expected as method parameter,
                 // re-encode the array value to json and correctly decode it using jsm_serializer
                 if (is_array($param) && !$rps[$index]->isArray() && $rps[$index]->getClass() != null) {
-                    $class = $rps[$index]->getClass()->getName();
-                    $param = json_encode($param);
+                    $class          = $rps[$index]->getClass()->getName();
+                    $param          = json_encode($param);
                     $params[$index] = $this->container->get('jms_serializer')->deserialize($param, $class, 'json');
                 }
             }
@@ -167,21 +182,29 @@ class JsonRpcController implements ContainerAwareInterface
             try {
                 $result = call_user_func_array(array($service, $method), $params);
             } catch (\Exception $e) {
-                return $this->getErrorResponse(self::INTERNAL_ERROR, $requestId, $this->convertExceptionToErrorData($e));
+                return $this->getErrorResponse(
+                    self::INTERNAL_ERROR,
+                    $requestId,
+                    $this->convertExceptionToErrorData($e)
+                );
             }
 
-            $response = array('jsonrpc' => '2.0');
+            $response           = array('jsonrpc' => '2.0');
             $response['result'] = $result;
-            $response['id'] = $requestId;
+            $response['id']     = $requestId;
 
             if ($this->container->has('jms_serializer')) {
-                $functionConfig = (
-                    isset($this->functions[$request['method']])
-                        ? $this->functions[$request['method']]
-                        : array()
+                $functionConfig       = (
+                isset($this->functions[$request['method']])
+                    ? $this->functions[$request['method']]
+                    : array()
                 );
                 $serializationContext = $this->getSerializationContext($functionConfig);
-                $response = $this->container->get('jms_serializer')->serialize($response, 'json', $serializationContext);
+                $response             = $this->container->get('jms_serializer')->serialize(
+                    $response,
+                    'json',
+                    $serializationContext
+                );
             } else {
                 $response = json_encode($response);
             }
@@ -195,21 +218,24 @@ class JsonRpcController implements ContainerAwareInterface
     /**
      * Add a new function that can be called by RPC
      *
-     * @param string $alias The function name used in the RPC call
-     * @param string $service The service name of the method to call
-     * @param string $method The method of $service
-     * @param bool $overwrite Whether to overwrite an existing function
+     * @param string $alias     The function name used in the RPC call
+     * @param string $service   The service name of the method to call
+     * @param string $method    The method of $service
+     * @param bool   $overwrite Whether to overwrite an existing function
+     *
      * @throws \InvalidArgumentException
      */
     public function addMethod($alias, $service, $method, $overwrite = false)
     {
-        if (!isset($this->functions)) $this->functions = array();
+        if (!isset($this->functions)) {
+            $this->functions = array();
+        }
         if (isset($this->functions[$alias]) && !$overwrite) {
-            throw new \InvalidArgumentException('JsonRpcController: The function "' . $alias . '" already exists.');
+            throw new \InvalidArgumentException('JsonRpcController: The function "'.$alias.'" already exists.');
         }
         $this->functions[$alias] = array(
             'service' => $service,
-            'method' => $method
+            'method'  => $method,
         );
     }
 
@@ -266,7 +292,7 @@ class JsonRpcController implements ContainerAwareInterface
 
     protected function getErrorResponse($code, $id, $data = null)
     {
-        $response = array('jsonrpc' => '2.0');
+        $response          = array('jsonrpc' => '2.0');
         $response['error'] = $this->getError($code);
 
         if ($data != null) {
@@ -292,6 +318,7 @@ class JsonRpcController implements ContainerAwareInterface
      * Get SerializationContext or creates one if jms_serialization_context option is set
      *
      * @param array $functionConfig
+     *
      * @return \JMS\Serializer\SerializationContext
      */
     protected function getSerializationContext(array $functionConfig)
@@ -308,7 +335,9 @@ class JsonRpcController implements ContainerAwareInterface
             }
 
             if (isset($functionConfig['jms_serialization_context']['max_depth_checks'])) {
-                $serializationContext->enableMaxDepthChecks($functionConfig['jms_serialization_context']['max_depth_checks']);
+                $serializationContext->enableMaxDepthChecks(
+                    $functionConfig['jms_serialization_context']['max_depth_checks']
+                );
             }
         } else {
             $serializationContext = $this->serializationContext;
@@ -316,11 +345,12 @@ class JsonRpcController implements ContainerAwareInterface
 
         return $serializationContext;
     }
-    
+
     /**
      * Finds whether a variable is an associative array
      *
      * @param $var
+     *
      * @return bool
      */
     protected function isAssoc($var)
