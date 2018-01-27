@@ -1,62 +1,75 @@
 <?php
+
 namespace Wa72\JsonRpcBundle\Tests;
 
-use Symfony\Component\HttpKernel\Kernel;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
 use Wa72\JsonRpcBundle\Controller\JsonRpcController;
-use Wa72\JsonRpcBundle\Tests\Fixtures\Testparameter;
 
-require __DIR__ . '/Fixtures/app/Wa72JsonRpcBundleTestKernel.php';
-
-class JsonRpcControllerTest extends \PHPUnit_Framework_TestCase {
-    /**
-     * @var \Wa72JsonRpcBundleTestKernel
-     */
-    private $kernel;
+class JsonRpcControllerTest extends KernelTestCase
+{
 
     /**
      * @var \Wa72\JsonRpcBundle\Controller\JsonRpcController
      */
-    private $controller;
+    protected $controller;
+
+    /**
+     * @var \Wa72\JsonRpcBundle\Controller\JsonRpcController
+     */
+    protected $controllerFromContainer;
 
     public function setUp()
     {
-        $config = array(
+        require_once __DIR__.'/Fixtures/app/Wa72JsonRpcBundleTestKernel.php';
+
+        $_SERVER['KERNEL_DIR'] = __DIR__.'/Fixtures/app';
+        $_SERVER['KERNEL_CLASS'] = \Wa72JsonRpcBundleTestKernel::class;
+
+        static::bootKernel(
+            [
+                'environment' => 'test',
+                'debug'       => true,
+            ]
+        );
+
+        $config           = array(
             'functions' => array(
                 'testhello' => array(
                     'service' => 'wa72_jsonrpc.testservice',
-                    'method' => 'hello'
-                )
-            )
+                    'method'  => 'hello',
+                ),
+            ),
         );
-        $this->kernel = new \Wa72JsonRpcBundleTestKernel('test', false);
-        $this->kernel->boot();
-        $this->controller = new JsonRpcController($this->kernel->getContainer(), $config);
+        $this->controller = new JsonRpcController(static::$kernel->getContainer(), $config);
+
+        $this->controllerFromContainer = static::$kernel->getContainer()->get('wa72_jsonrpc.jsonrpccontroller');
     }
 
     public function testHello()
     {
         $requestdata = array(
             'jsonrpc' => '2.0',
-            'id' => 'test',
-            'method' => 'testhello',
-            'params' => array('name' => 'Joe')
+            'id'      => 'test',
+            'method'  => 'testhello',
+            'params'  => array('name' => 'Joe'),
         );
-        $response = $this->makeRequest($this->controller, $requestdata);
+        $response    = $this->makeRequest($this->controller, $requestdata);
         $this->assertEquals('2.0', $response['jsonrpc']);
         $this->assertEquals('test', $response['id']);
         $this->assertArrayHasKey('result', $response);
         $this->assertArrayNotHasKey('error', $response);
         $this->assertEquals('Hello Joe!', $response['result']);
+    }
 
-        // Test: missing parameter
+    public function testHelloMissingParameter()
+    {
         $requestdata = array(
             'jsonrpc' => '2.0',
-            'id' => 'test',
-            'method' => 'testhello'
+            'id'      => 'test',
+            'method'  => 'testhello',
         );
-        $response = $this->makeRequest($this->controller, $requestdata);
+        $response    = $this->makeRequest($this->controller, $requestdata);
         $this->assertArrayHasKey('error', $response);
         $this->assertArrayNotHasKey('result', $response);
         $this->assertEquals(-32602, $response['error']['code']);
@@ -64,30 +77,31 @@ class JsonRpcControllerTest extends \PHPUnit_Framework_TestCase {
 
     public function testService()
     {
-        $controller = $this->kernel->getContainer()->get('wa72_jsonrpc.jsonrpccontroller');
         $requestdata = array(
             'jsonrpc' => '2.0',
-            'id' => 'testservice',
-            'method' => 'wa72_jsonrpc.testservice:hello',
-            'params' => array('name' => 'Max')
+            'id'      => 'testservice',
+            'method'  => 'wa72_jsonrpc.testservice:hello',
+            'params'  => array('name' => 'Max'),
         );
 
-        $response = $this->makeRequest($controller, $requestdata);
+        $response = $this->makeRequest($this->controllerFromContainer, $requestdata);
         $this->assertEquals('2.0', $response['jsonrpc']);
         $this->assertEquals('testservice', $response['id']);
         $this->assertArrayNotHasKey('error', $response);
         $this->assertArrayHasKey('result', $response);
         $this->assertEquals('Hello Max!', $response['result']);
+    }
 
-        // Test: non-existing service should return "Method not found" error
+    public function testServiceNonExistingServiceShouldReturnMethodNotFoundError()
+    {
         $requestdata = array(
             'jsonrpc' => '2.0',
-            'id' => 'testservice',
-            'method' => 'someservice:somemethod',
-            'params' => array('name' => 'Max')
+            'id'      => 'testservice',
+            'method'  => 'someservice:somemethod',
+            'params'  => array('name' => 'Max'),
         );
 
-        $response = $this->makeRequest($controller, $requestdata);
+        $response = $this->makeRequest($this->controllerFromContainer, $requestdata);
         $this->assertEquals('2.0', $response['jsonrpc']);
         $this->assertEquals('testservice', $response['id']);
         $this->assertArrayNotHasKey('result', $response);
@@ -95,75 +109,58 @@ class JsonRpcControllerTest extends \PHPUnit_Framework_TestCase {
         $this->assertEquals(-32601, $response['error']['code']);
     }
 
-    public function testParameters()
+    public function testParametersAsAssocArrayInRightOrder()
     {
-        // params as associative array in right order
-        $controller = $this->kernel->getContainer()->get('wa72_jsonrpc.jsonrpccontroller');
         $requestdata = array(
             'jsonrpc' => '2.0',
-            'id' => 'parametertest',
-            'method' => 'wa72_jsonrpc.testservice:parametertest',
-            'params' => array('arg1' => 'abc', 'arg2' => 'def', 'arg_array' => array())
+            'id'      => 'parametertest',
+            'method'  => 'wa72_jsonrpc.testservice:parametertest',
+            'params'  => array('arg1' => 'abc', 'arg2' => 'def', 'arg_array' => array()),
         );
 
-        $response = $this->makeRequest($controller, $requestdata);
+        $response = $this->makeRequest($this->controllerFromContainer, $requestdata);
         $this->assertArrayNotHasKey('error', $response);
         $this->assertArrayHasKey('result', $response);
         $this->assertEquals('abcdef', $response['result']);
+    }
 
-        // params as simple array in right order
-        $controller = $this->kernel->getContainer()->get('wa72_jsonrpc.jsonrpccontroller');
+    public function testParametersSimpleArrayInRightOrder()
+    {
         $requestdata = array(
             'jsonrpc' => '2.0',
-            'id' => 'parametertest',
-            'method' => 'wa72_jsonrpc.testservice:parametertest',
-            'params' => array('abc', 'def', array())
+            'id'      => 'parametertest',
+            'method'  => 'wa72_jsonrpc.testservice:parametertest',
+            'params'  => array('abc', 'def', array()),
         );
 
-        $response = $this->makeRequest($controller, $requestdata);
+        $response = $this->makeRequest($this->controllerFromContainer, $requestdata);
         $this->assertArrayNotHasKey('error', $response);
         $this->assertArrayHasKey('result', $response);
         $this->assertEquals('abcdef', $response['result']);
+    }
 
-        // params as associative array in mixed order
-        $controller = $this->kernel->getContainer()->get('wa72_jsonrpc.jsonrpccontroller');
+    public function testParametersAsAssocArrayInMixedOrder()
+    {
         $requestdata = array(
             'jsonrpc' => '2.0',
-            'id' => 'parametertest',
-            'method' => 'wa72_jsonrpc.testservice:parametertest',
-            'params' => array('arg_array' => array(), 'arg2' => 'def', 'arg1' => 'abc')
+            'id'      => 'parametertest',
+            'method'  => 'wa72_jsonrpc.testservice:parametertest',
+            'params'  => array('arg_array' => array(), 'arg2' => 'def', 'arg1' => 'abc'),
         );
 
-        $response = $this->makeRequest($controller, $requestdata);
+        $response = $this->makeRequest($this->controllerFromContainer, $requestdata);
         $this->assertArrayNotHasKey('error', $response);
         $this->assertArrayHasKey('result', $response);
         $this->assertEquals('abcdef', $response['result']);
-
-        // params with objects
-        $controller = $this->kernel->getContainer()->get('wa72_jsonrpc.jsonrpccontroller');
-        $arg3 = new Testparameter('abc');
-        $arg3->setB('def');
-        $arg3->setC('ghi');
-        $requestdata = array(
-            'jsonrpc' => '2.0',
-            'id' => 'testParameterTypes',
-            'method' => 'wa72_jsonrpc.testservice:testParameterTypes',
-            'params' => array('arg1' => array(), 'arg2' => new \stdClass(), 'arg3' => $arg3)
-        );
-
-        $response = $this->makeRequest($controller, $requestdata);
-        $this->assertArrayNotHasKey('error', $response);
-        $this->assertArrayHasKey('result', $response);
-        $this->assertEquals('abcdefghi', $response['result']);
     }
 
     public function testAddMethod()
     {
         $requestdata = array(
             'jsonrpc' => '2.0',
-            'id' => 'test',
-            'method' => 'testhi',
-            'params' => array('name' => 'Tom')
+            'id'      => 'test',
+            'method'  => 'testhi',
+            'params'  => array('name' => 'Tom'),
         );
         // this request will fail because there is no such method "testhi"
         $response = $this->makeRequest($this->controller, $requestdata);
@@ -181,23 +178,22 @@ class JsonRpcControllerTest extends \PHPUnit_Framework_TestCase {
         $this->assertEquals('Hi Tom!', $response['result']);
     }
 
-    private function makeRequest($controller, $requestdata)
+    protected function makeRequest($controller, $requestdata)
     {
-        /** @var \JMS\Serializer\Serializer $serializer */
-        $serializer = $this->kernel->getContainer()->get('jms_serializer');
-        return json_decode($controller->execute(
-            new Request(array(), array(), array(), array(), array(), array(), $serializer->serialize($requestdata, 'json'))
-        )->getContent(), true);
-    }
-
-    /**
-     * Shuts the kernel down if it was used in the test.
-     */
-    protected function tearDown()
-    {
-        if (null !== $this->kernel) {
-            $this->kernel->shutdown();
-        }
+        return json_decode(
+            $controller->execute(
+                new Request(
+                    array(),
+                    array(),
+                    array(),
+                    array(),
+                    array(),
+                    array(),
+                    json_encode($requestdata)
+                )
+            )->getContent(),
+            true
+        );
     }
 
 }

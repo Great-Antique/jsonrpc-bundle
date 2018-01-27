@@ -20,7 +20,7 @@ Installation
 .. code-block:: yaml
 
     # app/config/routing.yml
-    wa72_json_rpc:
+    wa72_jsonrpc:
         resource: "@Wa72JsonRpcBundle/Resources/config/routing.yml"
         prefix:   /jsonrpc
 
@@ -39,7 +39,7 @@ The key of an entry of the "functions" array is the alias name for the method to
 .. code-block:: yaml
 
     # app/config/config.yml
-    wa72_json_rpc:
+    wa72_jsonrpc:
         functions:
             myfunction1:
                 service: "mybundle.servicename"
@@ -56,7 +56,7 @@ If you use `jms\_serializer`_ you can also configure exclusion strategies (group
 .. code-block:: yaml
 
     # app/config/config.yml
-    wa72_json_rpc:
+    wa72_jsonrpc:
         functions:
             myfunction1:
                 service: "mybundle.servicename"
